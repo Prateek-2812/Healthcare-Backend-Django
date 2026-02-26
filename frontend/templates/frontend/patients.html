@@ -1,0 +1,195 @@
+{% extends 'frontend/app_base.html' %}
+{% block title %}Patients - Healthcare{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>Patients</h1>
+    <button class="btn btn-success" onclick="openAddModal()">+ Add Patient</button>
+</div>
+
+<div id="alert" class="alert"></div>
+
+<div class="card">
+    <div id="patientsList" class="loading">Loading patients...</div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-overlay" id="patientModal">
+    <div class="modal">
+        <h3 id="modalTitle">Add Patient</h3>
+        <div id="modalAlert" class="alert"></div>
+        <form id="patientForm">
+            <input type="hidden" id="patientId">
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" placeholder="Patient's full name" required>
+            </div>
+            <div class="form-group">
+                <label for="age">Age</label>
+                <input type="number" id="age" placeholder="Age" required min="0" max="150">
+            </div>
+            <div class="form-group">
+                <label for="gender">Gender</label>
+                <select id="gender" required>
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone</label>
+                <input type="text" id="phone" placeholder="Phone number">
+            </div>
+            <div class="form-group">
+                <label for="address">Address</label>
+                <textarea id="address" rows="2" placeholder="Address"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="medical_history">Medical History</label>
+                <textarea id="medical_history" rows="2" placeholder="Known conditions, allergies, etc."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-success" id="saveBtn">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let patients = [];
+
+    async function loadPatients() {
+        try {
+            const res = await apiRequest('/patients/');
+            patients = res.results || (Array.isArray(res) ? res : []);
+            renderPatients();
+        } catch (err) {
+            document.getElementById('patientsList').innerHTML = '<div class="empty-state"><p>Failed to load patients.</p></div>';
+        }
+    }
+
+    function renderPatients() {
+        const container = document.getElementById('patientsList');
+        if (!patients.length) {
+            container.innerHTML = '<div class="empty-state"><p>No patients yet.</p><p>Click "Add Patient" to get started.</p></div>';
+            return;
+        }
+
+        let html = `<div class="table-responsive"><table>
+        <thead><tr>
+            <th>Name</th><th>Age</th><th>Gender</th><th>Phone</th><th>Address</th><th>Actions</th>
+        </tr></thead><tbody>`;
+
+        patients.forEach(p => {
+            html += `<tr>
+            <td>${p.name}</td>
+            <td>${p.age}</td>
+            <td>${p.gender}</td>
+            <td>${p.phone || '-'}</td>
+            <td>${p.address || '-'}</td>
+            <td class="actions">
+                <button class="btn btn-edit btn-sm" onclick="openEditModal(${p.id})">Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="deletePatient(${p.id})">Delete</button>
+            </td>
+        </tr>`;
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    function openAddModal() {
+        document.getElementById('modalTitle').textContent = 'Add Patient';
+        document.getElementById('patientForm').reset();
+        document.getElementById('patientId').value = '';
+        hideAlert('modalAlert');
+        document.getElementById('patientModal').classList.add('show');
+    }
+
+    function openEditModal(id) {
+        const p = patients.find(x => x.id === id);
+        if (!p) return;
+
+        document.getElementById('modalTitle').textContent = 'Edit Patient';
+        document.getElementById('patientId').value = p.id;
+        document.getElementById('name').value = p.name;
+        document.getElementById('age').value = p.age;
+        document.getElementById('gender').value = p.gender;
+        document.getElementById('phone').value = p.phone || '';
+        document.getElementById('address').value = p.address || '';
+        document.getElementById('medical_history').value = p.medical_history || '';
+        hideAlert('modalAlert');
+        document.getElementById('patientModal').classList.add('show');
+    }
+
+    function closeModal() {
+        document.getElementById('patientModal').classList.remove('show');
+    }
+
+    document.getElementById('patientForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        hideAlert('modalAlert');
+
+        const id = document.getElementById('patientId').value;
+        const body = {
+            name: document.getElementById('name').value.trim(),
+            age: parseInt(document.getElementById('age').value),
+            gender: document.getElementById('gender').value,
+            phone: document.getElementById('phone').value.trim(),
+            address: document.getElementById('address').value.trim(),
+            medical_history: document.getElementById('medical_history').value.trim()
+        };
+
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true;
+
+        try {
+            let data;
+            if (id) {
+                data = await apiRequest(`/patients/${id}/`, 'PUT', body);
+            } else {
+                data = await apiRequest('/patients/', 'POST', body);
+            }
+
+            if (data._status === 201 || data._status === 200) {
+                closeModal();
+                showAlert('alert', id ? 'Patient updated.' : 'Patient added.', 'success');
+                loadPatients();
+            } else {
+                let msg = '';
+                for (const key in data) {
+                    if (key === '_status') continue;
+                    const val = Array.isArray(data[key]) ? data[key].join(' ') : data[key];
+                    msg += val + ' ';
+                }
+                showAlert('modalAlert', msg.trim() || 'Failed to save.', 'error');
+            }
+        } catch (err) {
+            showAlert('modalAlert', 'Something went wrong.', 'error');
+        }
+        btn.disabled = false;
+    });
+
+    async function deletePatient(id) {
+        if (!confirm('Are you sure you want to delete this patient?')) return;
+
+        try {
+            await apiRequest(`/patients/${id}/`, 'DELETE');
+            showAlert('alert', 'Patient deleted.', 'success');
+            loadPatients();
+        } catch (err) {
+            showAlert('alert', 'Failed to delete patient.', 'error');
+        }
+    }
+
+    document.getElementById('patientModal').addEventListener('click', function (e) {
+        if (e.target === this) closeModal();
+    });
+
+    loadPatients();
+</script>
+{% endblock %}

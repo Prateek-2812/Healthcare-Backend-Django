@@ -1,0 +1,95 @@
+{% extends 'frontend/base.html' %}
+{% block title %}Register - Healthcare{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2>Create Account</h2>
+        <p class="subtitle">Join the Healthcare platform</p>
+
+        <div id="alert" class="alert"></div>
+
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Choose a username" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Min 8 characters" required minlength="8">
+            </div>
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" placeholder="Re-enter your password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="registerBtn">Create Account</button>
+        </form>
+
+        <p class="footer-text">
+            Already have an account? <a href="/login/">Sign in</a>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('registerForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        hideAlert('alert');
+
+        const username = document.getElementById('username').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+
+        if (!username || !email || !password) {
+            showAlert('alert', 'Please fill in all fields.', 'error');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            showAlert('alert', 'Passwords do not match.', 'error');
+            return;
+        }
+
+        if (password.length < 8) {
+            showAlert('alert', 'Password must be at least 8 characters.', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('registerBtn');
+        btn.disabled = true;
+        btn.textContent = 'Creating account...';
+
+        try {
+            const data = await apiRequest('/auth/register/', 'POST', { username, email, password });
+
+            if (data && data._status === 201) {
+                showAlert('alert', 'Account created successfully! Redirecting to login...', 'success');
+                setTimeout(() => { window.location.href = '/login/'; }, 1500);
+            } else if (data) {
+                let msg = '';
+                for (const key in data) {
+                    if (key === '_status' || key === 'results') continue;
+                    const val = Array.isArray(data[key]) ? data[key].join(' ') : data[key];
+                    msg += val + ' ';
+                }
+                showAlert('alert', msg.trim() || 'Registration failed. Please try again.', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+            }
+        } catch (err) {
+            showAlert('alert', 'Something went wrong. Please try again.', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Create Account';
+        }
+    });
+
+    if (isLoggedIn()) window.location.href = '/dashboard/';
+</script>
+{% endblock %}

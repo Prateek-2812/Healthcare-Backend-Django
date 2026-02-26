@@ -1,0 +1,71 @@
+{% extends 'frontend/app_base.html' %}
+{% block title %}Dashboard - Healthcare{% endblock %}
+
+{% block page_content %}
+<div class="welcome-section">
+    <h1>Welcome, <span id="displayName">User</span> 👋</h1>
+    <p>Here's an overview of your healthcare data.</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card patients">
+        <div class="stat-number" id="patientCount">-</div>
+        <div class="stat-label">Patients</div>
+    </div>
+    <div class="stat-card doctors">
+        <div class="stat-number" id="doctorCount">-</div>
+        <div class="stat-label">Doctors</div>
+    </div>
+    <div class="stat-card mappings">
+        <div class="stat-number" id="mappingCount">-</div>
+        <div class="stat-label">Assignments</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Quick Actions</h3>
+    <div class="quick-actions">
+        <a href="/patients/" class="quick-action-card">
+            <div class="icon">🏥</div>
+            <div class="label">Manage Patients</div>
+        </a>
+        <a href="/doctors/" class="quick-action-card">
+            <div class="icon">👨‍⚕️</div>
+            <div class="label">Manage Doctors</div>
+        </a>
+        <a href="/mappings/" class="quick-action-card">
+            <div class="icon">🔗</div>
+            <div class="label">Assign Doctors</div>
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadDashboard() {
+        const name = localStorage.getItem('username') || 'User';
+        document.getElementById('displayName').textContent = name;
+
+        try {
+            const [pRes, dRes, mRes] = await Promise.all([
+                apiRequest('/patients/'),
+                apiRequest('/doctors/'),
+                apiRequest('/mappings/')
+            ]);
+
+            const patients = pRes.results || (Array.isArray(pRes) ? pRes : []);
+            const doctors = dRes.results || (Array.isArray(dRes) ? dRes : []);
+            const mappings = mRes.results || (Array.isArray(mRes) ? mRes : []);
+
+            document.getElementById('patientCount').textContent = patients.length;
+            document.getElementById('doctorCount').textContent = doctors.length;
+            document.getElementById('mappingCount').textContent = mappings.length;
+        } catch (err) {
+            console.error('Failed to load dashboard stats', err);
+        }
+    }
+
+    loadDashboard();
+</script>
+{% endblock %}

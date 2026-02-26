@@ -1,0 +1,184 @@
+{% extends 'frontend/app_base.html' %}
+{% block title %}Doctors - Healthcare{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>Doctors</h1>
+    <button class="btn btn-success" onclick="openAddModal()">+ Add Doctor</button>
+</div>
+
+<div id="alert" class="alert"></div>
+
+<div class="card">
+    <div id="doctorsList" class="loading">Loading doctors...</div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-overlay" id="doctorModal">
+    <div class="modal">
+        <h3 id="modalTitle">Add Doctor</h3>
+        <div id="modalAlert" class="alert"></div>
+        <form id="doctorForm">
+            <input type="hidden" id="doctorId">
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" placeholder="Doctor's full name" required>
+            </div>
+            <div class="form-group">
+                <label for="specialization">Specialization</label>
+                <input type="text" id="specialization" placeholder="e.g. Cardiology, Neurology" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone</label>
+                <input type="text" id="phone" placeholder="Phone number">
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" placeholder="doctor@hospital.com">
+            </div>
+            <div class="form-group">
+                <label for="experience_years">Years of Experience</label>
+                <input type="number" id="experience_years" placeholder="0" min="0" value="0">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-success" id="saveBtn">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let doctors = [];
+
+    async function loadDoctors() {
+        try {
+            const res = await apiRequest('/doctors/');
+            doctors = res.results || (Array.isArray(res) ? res : []);
+            renderDoctors();
+        } catch (err) {
+            document.getElementById('doctorsList').innerHTML = '<div class="empty-state"><p>Failed to load doctors.</p></div>';
+        }
+    }
+
+    function renderDoctors() {
+        const container = document.getElementById('doctorsList');
+        if (!doctors.length) {
+            container.innerHTML = '<div class="empty-state"><p>No doctors yet.</p><p>Click "Add Doctor" to get started.</p></div>';
+            return;
+        }
+
+        let html = `<div class="table-responsive"><table>
+        <thead><tr>
+            <th>Name</th><th>Specialization</th><th>Experience</th><th>Phone</th><th>Email</th><th>Actions</th>
+        </tr></thead><tbody>`;
+
+        doctors.forEach(d => {
+            html += `<tr>
+            <td>Dr. ${d.name}</td>
+            <td>${d.specialization}</td>
+            <td>${d.experience_years} yrs</td>
+            <td>${d.phone || '-'}</td>
+            <td>${d.email || '-'}</td>
+            <td class="actions">
+                <button class="btn btn-edit btn-sm" onclick="openEditModal(${d.id})">Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDoctor(${d.id})">Delete</button>
+            </td>
+        </tr>`;
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    function openAddModal() {
+        document.getElementById('modalTitle').textContent = 'Add Doctor';
+        document.getElementById('doctorForm').reset();
+        document.getElementById('doctorId').value = '';
+        hideAlert('modalAlert');
+        document.getElementById('doctorModal').classList.add('show');
+    }
+
+    function openEditModal(id) {
+        const d = doctors.find(x => x.id === id);
+        if (!d) return;
+
+        document.getElementById('modalTitle').textContent = 'Edit Doctor';
+        document.getElementById('doctorId').value = d.id;
+        document.getElementById('name').value = d.name;
+        document.getElementById('specialization').value = d.specialization;
+        document.getElementById('phone').value = d.phone || '';
+        document.getElementById('email').value = d.email || '';
+        document.getElementById('experience_years').value = d.experience_years;
+        hideAlert('modalAlert');
+        document.getElementById('doctorModal').classList.add('show');
+    }
+
+    function closeModal() {
+        document.getElementById('doctorModal').classList.remove('show');
+    }
+
+    document.getElementById('doctorForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        hideAlert('modalAlert');
+
+        const id = document.getElementById('doctorId').value;
+        const body = {
+            name: document.getElementById('name').value.trim(),
+            specialization: document.getElementById('specialization').value.trim(),
+            phone: document.getElementById('phone').value.trim(),
+            email: document.getElementById('email').value.trim(),
+            experience_years: parseInt(document.getElementById('experience_years').value) || 0
+        };
+
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true;
+
+        try {
+            let data;
+            if (id) {
+                data = await apiRequest(`/doctors/${id}/`, 'PUT', body);
+            } else {
+                data = await apiRequest('/doctors/', 'POST', body);
+            }
+
+            if (data._status === 201 || data._status === 200) {
+                closeModal();
+                showAlert('alert', id ? 'Doctor updated.' : 'Doctor added.', 'success');
+                loadDoctors();
+            } else {
+                let msg = '';
+                for (const key in data) {
+                    if (key === '_status') continue;
+                    const val = Array.isArray(data[key]) ? data[key].join(' ') : data[key];
+                    msg += val + ' ';
+                }
+                showAlert('modalAlert', msg.trim() || 'Failed to save.', 'error');
+            }
+        } catch (err) {
+            showAlert('modalAlert', 'Something went wrong.', 'error');
+        }
+        btn.disabled = false;
+    });
+
+    async function deleteDoctor(id) {
+        if (!confirm('Are you sure you want to delete this doctor?')) return;
+
+        try {
+            await apiRequest(`/doctors/${id}/`, 'DELETE');
+            showAlert('alert', 'Doctor deleted.', 'success');
+            loadDoctors();
+        } catch (err) {
+            showAlert('alert', 'Failed to delete doctor.', 'error');
+        }
+    }
+
+    document.getElementById('doctorModal').addEventListener('click', function (e) {
+        if (e.target === this) closeModal();
+    });
+
+    loadDoctors();
+</script>
+{% endblock %}

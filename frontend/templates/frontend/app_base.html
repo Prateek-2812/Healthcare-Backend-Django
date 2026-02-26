@@ -1,0 +1,43 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Healthcare{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'frontend/css/style.css' %}">
+</head>
+
+<body>
+    <nav class="navbar">
+        <a href="/dashboard/" class="brand">Health<span>Care</span></a>
+        <div class="nav-links">
+            <a href="/dashboard/" id="nav-dashboard">Dashboard</a>
+            <a href="/patients/" id="nav-patients">Patients</a>
+            <a href="/doctors/" id="nav-doctors">Doctors</a>
+            <a href="/mappings/" id="nav-mappings">Mappings</a>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        {% block page_content %}{% endblock %}
+    </div>
+
+    <script src="{% static 'frontend/js/app.js' %}"></script>
+    <script>
+        if (!isLoggedIn()) {
+            window.location.href = '/login/';
+        }
+        const path = window.location.pathname;
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            if (path.startsWith(link.getAttribute('href'))) {
+                link.classList.add('active');
+            }
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

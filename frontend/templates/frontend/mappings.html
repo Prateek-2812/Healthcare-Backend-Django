@@ -1,0 +1,150 @@
+{% extends 'frontend/app_base.html' %}
+{% block title %}Mappings - Healthcare{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>Patient-Doctor Assignments</h1>
+</div>
+
+<div id="alert" class="alert"></div>
+
+<!-- Assign Form -->
+<div class="card">
+    <h3>Assign a Doctor to a Patient</h3>
+    <form id="mappingForm" class="mapping-form">
+        <div class="form-group">
+            <label for="patientSelect">Patient</label>
+            <select id="patientSelect" required>
+                <option value="">Select patient</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="doctorSelect">Doctor</label>
+            <select id="doctorSelect" required>
+                <option value="">Select doctor</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-success" id="assignBtn">Assign</button>
+    </form>
+</div>
+
+<!-- Mappings List -->
+<div class="card">
+    <h3>Current Assignments</h3>
+    <div id="mappingsList" class="loading">Loading assignments...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let mappings = [];
+
+    async function loadData() {
+        try {
+            const [pRes, dRes, mRes] = await Promise.all([
+                apiRequest('/patients/'),
+                apiRequest('/doctors/'),
+                apiRequest('/mappings/')
+            ]);
+
+            const patients = pRes.results || (Array.isArray(pRes) ? pRes : []);
+            const doctors = dRes.results || (Array.isArray(dRes) ? dRes : []);
+
+            const patientSelect = document.getElementById('patientSelect');
+            patientSelect.innerHTML = '<option value="">Select patient</option>';
+            patients.forEach(p => {
+                patientSelect.innerHTML += `<option value="${p.id}">${p.name} (Age: ${p.age})</option>`;
+            });
+
+            const doctorSelect = document.getElementById('doctorSelect');
+            doctorSelect.innerHTML = '<option value="">Select doctor</option>';
+            doctors.forEach(d => {
+                doctorSelect.innerHTML += `<option value="${d.id}">Dr. ${d.name} - ${d.specialization}</option>`;
+            });
+
+            mappings = mRes.results || (Array.isArray(mRes) ? mRes : []);
+            renderMappings();
+        } catch (err) {
+            console.error(err);
+            document.getElementById('mappingsList').innerHTML = '<div class="empty-state"><p>Failed to load data.</p></div>';
+        }
+    }
+
+    function renderMappings() {
+        const container = document.getElementById('mappingsList');
+        if (!mappings.length) {
+            container.innerHTML = '<div class="empty-state"><p>No assignments yet.</p><p>Use the form above to assign a doctor to a patient.</p></div>';
+            return;
+        }
+
+        let html = `<div class="table-responsive"><table>
+        <thead><tr>
+            <th>Patient</th><th>Doctor</th><th>Specialization</th><th>Assigned On</th><th>Actions</th>
+        </tr></thead><tbody>`;
+
+        mappings.forEach(m => {
+            const date = new Date(m.assigned_at).toLocaleDateString();
+            html += `<tr>
+            <td>${m.patient.name}</td>
+            <td>Dr. ${m.doctor.name}</td>
+            <td>${m.doctor.specialization}</td>
+            <td>${date}</td>
+            <td>
+                <button class="btn btn-danger btn-sm" onclick="removeMapping(${m.id})">Remove</button>
+            </td>
+        </tr>`;
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    document.getElementById('mappingForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        hideAlert('alert');
+
+        const patient = document.getElementById('patientSelect').value;
+        const doctor = document.getElementById('doctorSelect').value;
+
+        if (!patient || !doctor) {
+            showAlert('alert', 'Please select both a patient and a doctor.', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('assignBtn');
+        btn.disabled = true;
+
+        try {
+            const data = await apiRequest('/mappings/', 'POST', {
+                patient: parseInt(patient),
+                doctor: parseInt(doctor)
+            });
+
+            if (data._status === 201) {
+                showAlert('alert', 'Doctor assigned to patient successfully.', 'success');
+                document.getElementById('mappingForm').reset();
+                loadData();
+            } else {
+                showAlert('alert', data.error || 'This doctor may already be assigned to this patient.', 'error');
+            }
+        } catch (err) {
+            showAlert('alert', 'Something went wrong.', 'error');
+        }
+        btn.disabled = false;
+    });
+
+    async function removeMapping(id) {
+        if (!confirm('Remove this assignment?')) return;
+
+        try {
+            await apiRequest(`/mappings/${id}/`, 'DELETE');
+            showAlert('alert', 'Assignment removed.', 'success');
+            loadData();
+        } catch (err) {
+            showAlert('alert', 'Failed to remove assignment.', 'error');
+        }
+    }
+
+    loadData();
+</script>
+{% endblock %}
