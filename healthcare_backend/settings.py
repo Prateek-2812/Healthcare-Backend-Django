@@ -98,6 +98,17 @@ DATABASES = {
     }
 }
 
+# Local developer convenience: allow falling back to SQLite when DJANGO_USE_SQLITE is set
+# Defaults to True so a dev can run the project locally without a running Postgres instance.
+USE_SQLITE = os.getenv('DJANGO_USE_SQLITE', 'True') == 'True'
+if USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
